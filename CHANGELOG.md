@@ -1,3 +1,12 @@
+0.15
+-----------------------------------------------------------------------------
+- Allow full control over the output format (merge requests #2, #3). To do
+so, a type `Renderer` has been added which can be configured via
+`setRenderer`.  The setting `netstring` has been removed, instead the
+complete renderer can be requested via `renderer`.
+- A setting `setReadEnvironment` has been added which allows one to ignore
+process environment variables (see merge request #7).
+
 0.14.1
 -----------------------------------------------------------------------------
 - Maintenance release to enable compatibility with GHC 8.4.

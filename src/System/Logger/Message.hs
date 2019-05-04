@@ -20,6 +20,7 @@ module System.Logger.Message
     ( ToBytes (..)
     , Msg
     , Builder
+    , Element (..)
     , msg
     , field
     , (.=)
@@ -27,7 +28,11 @@ module System.Logger.Message
     , (~~)
     , val
     , eval
+    , builderSize
+    , builderBytes
     , render
+    , renderDefault
+    , renderNetstr
     ) where
 
 #if MIN_VERSION_base(4,9,0)
@@ -80,6 +85,12 @@ instance Monoid Builder where
 
 eval :: Builder -> L.ByteString
 eval (Builder n b) = B.toLazyByteStringWith (B.safeStrategy n 256) L.empty b
+
+builderSize :: Builder -> Int
+builderSize (Builder n _) = n
+
+builderBytes :: Builder -> B.Builder
+builderBytes (Builder _ b) = b
 
 -- | Convert some value to a 'Builder'.
 class ToBytes a where
@@ -153,24 +164,15 @@ infixr 6 +++
 val :: ByteString -> Builder
 val = bytes
 
--- | Intersperse parts of the log message with the given delimiter and
--- render the whole builder into a 'L.ByteString'.
---
--- If the second parameter is set to @True@, netstrings encoding is used for
--- the message elements. Cf. <http://cr.yp.to/proto/netstrings.txt> for
--- details.
-render :: ByteString -> Bool -> (Msg -> Msg) -> L.ByteString
-render _ True m = finish . encAll mempty . elements . m $ empty
-  where
-    encAll !acc []     = acc
-    encAll !acc (b:bb) = encAll (acc <> encOne b) bb
+-- | Construct elements, call a renderer, and run the whole builder
+-- into a 'L.ByteString'.
+render :: ([Element] -> B.Builder) -> (Msg -> Msg) -> L.ByteString
+render f m = finish . f . elements . m $ empty
 
-    encOne (Bytes   e) = netstr e
-    encOne (Field k v) = netstr k <> eq <> netstr v
-
-    eq = B.byteString "1:=,"
-
-render s False m = finish . encAll mempty . elements . m $ empty
+-- | Simple 'Renderer' with '=' between field names and values and a custom
+-- separator.
+renderDefault :: ByteString -> [Element] -> B.Builder
+renderDefault s = encAll mempty
   where
     encAll !acc    []  = acc
     encAll !acc (b:[]) = acc <> encOne b
@@ -181,6 +183,19 @@ render s False m = finish . encAll mempty . elements . m $ empty
 
     eq  = B.char8 '='
     sep = B.byteString s
+
+-- | 'Renderer' that uses <http://cr.yp.to/proto/netstrings.txt netstring>
+-- encoding for log lines.
+renderNetstr :: [Element] -> B.Builder
+renderNetstr = encAll mempty
+  where
+    encAll !acc []     = acc
+    encAll !acc (b:bb) = encAll (acc <> encOne b) bb
+
+    encOne (Bytes   e) = netstr e
+    encOne (Field k v) = netstr k <> eq <> netstr v
+
+    eq = B.byteString "1:=,"
 
 finish :: B.Builder -> L.ByteString
 finish = B.toLazyByteStringWith (B.untrimmedStrategy 256 256) "\n"
