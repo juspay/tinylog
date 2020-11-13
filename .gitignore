@@ -19,6 +19,7 @@ tags
 .#*
 \#*#
 .*.sw[a-z]
+.stack-work/*
 *.un~
 *.org
 *.tar
